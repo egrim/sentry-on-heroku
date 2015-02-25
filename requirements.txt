@@ -33,6 +33,7 @@ exam==0.10.5
 gevent==1.0.1
 greenlet==0.4.2
 gunicorn==19.2.1
+honcho==0.5.0
 httpagentparser==1.2.2
 httplib2==0.9
 ipaddr==2.1.11
