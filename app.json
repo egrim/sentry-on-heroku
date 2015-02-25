@@ -10,7 +10,8 @@
   "addons": [
     "heroku-postgresql:hobby-dev",
     "mandrill:starter",
-    "newrelic:stark"
+    "newrelic:stark",
+    "rediscloud"
   ],
   "env": {
     "DJANGO_SETTINGS_MODULE": {
