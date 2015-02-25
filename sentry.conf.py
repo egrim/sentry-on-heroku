@@ -43,6 +43,7 @@ SENTRY_REDIS_OPTIONS = {
         REDIS['DB']: {
             'host': REDIS['HOST'],
             'port': REDIS['PORT'],
+            'password': REDIS['PASSWORD']
         }
     }
 }
