@@ -263,7 +263,7 @@ BCRYPT_MIGRATE = True
 ## Social Auth ##
 #################
 
-SOCIAL_AUTH_CREATE_USERS = 'SOCIAL_AUTH_CREATE_USERS' in os.environ
+SOCIAL_AUTH_CREATE_USERS = 'rue' in os.environ.get('SOCIAL_AUTH_CREATE_USERS', 'False')
 
 # http://twitter.com/apps/new
 # It's important that input a callback URL, even if its useless. We have no idea why, consult Twitter.
