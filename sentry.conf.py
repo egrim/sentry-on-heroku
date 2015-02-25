@@ -259,9 +259,14 @@ INSTALLED_APPS += ('django_bcrypt',)
 # The hash is also migrated when ``BCRYPT_ROUNDS`` changes.
 BCRYPT_MIGRATE = True
 
-#################
-## Social Auth ##
-#################
+##########
+## Auth ##
+##########
+
+# Should users be allowed to register an account? If this is disabled
+# accounts can only be created when someone is invited or added
+# manually.
+SENTRY_ALLOW_REGISTRATION = 'rue' in os.environ.get('SENTRY_ALLOW_REGISTRATION', 'False')
 
 SOCIAL_AUTH_CREATE_USERS = 'rue' in os.environ.get('SOCIAL_AUTH_CREATE_USERS', 'False')
 
