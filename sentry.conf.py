@@ -1,60 +1,177 @@
+# This file is just Python, with a touch of Django which means you
+# you can inherit and tweak settings to your hearts content.
+import os.path
 import logging
-import os
-import sys
 
 from sentry.conf.server import *
 
-ROOT = os.path.dirname(__file__)
-
-sys.path.append(ROOT)
+CONF_ROOT = os.path.dirname(__file__)
 
 import dj_database_url
-DATABASES = {'default': dj_database_url.config()}
+DATABASES = {
+    'default': dj_database_url.config(default='sqlite:///%s' % os.path.join(CONF_ROOT, 'sentry.db'))
+}
 
+# You should not change this setting after your database has been created
+# unless you have altered all schemas first
+SENTRY_USE_BIG_INTS = True
 
-# Sentry configuration
-# --------------------
+# If you're expecting any kind of real traffic on Sentry, we highly recommend
+# configuring the CACHES and Redis settings
 
-SENTRY_KEY = os.environ.get('SENTRY_KEY')
-SECRET_KEY = os.environ.get('SECRET_KEY')
+#############
+## General ##
+#############
 
-# Set this to false to require authentication
-SENTRY_PUBLIC = False
+# The administrative email for this installation.
+# Note: This will be reported back to getsentry.com as the point of contact. See
+# the beacon documentation for more information.
+SENTRY_ADMIN_EMAIL = os.environ.get('SENTRY_ADMIN_EMAIL', 'your.name@example.com')
+
+###########
+## Redis ##
+###########
+
+# Generic Redis configuration used as defaults for various things including:
+# Buffers, Quotas, TSDB
+
+import dj_redis_url
+REDIS = dj_redis_url.config(env="REDISCLOUD_URL", default='redis://127.0.0.1')
+
+SENTRY_REDIS_OPTIONS = {
+    'hosts': {
+        REDIS['DB']: {
+            'host': REDIS['HOST'],
+            'port': REDIS['PORT'],
+        }
+    }
+}
+
+###########
+## Cache ##
+###########
+
+# If you wish to use memcached, install the dependencies and adjust the config
+# as shown:
+#
+#   pip install python-memcached
+#
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+#         'LOCATION': ['127.0.0.1:11211'],
+#     }
+# }
+#
+# SENTRY_CACHE = 'sentry.cache.django.DjangoCache'
+
+SENTRY_CACHE = 'sentry.cache.redis.RedisCache'
+
+###########
+## Queue ##
+###########
+
+# See http://sentry.readthedocs.org/en/latest/queue/index.html for more
+# information on configuring your queue broker and workers. Sentry relies
+# on a Python framework called Celery to manage queues.
+
+CELERY_ALWAYS_EAGER = False
+BROKER_URL = os.environ.get('REDISCLOUD_URL', 'redis://localhost:6379')
+
+#################
+## Rate Limits ##
+#################
+
+SENTRY_RATELIMITER = 'sentry.ratelimits.redis.RedisRateLimiter'
+
+####################
+## Update Buffers ##
+####################
+
+# Buffers (combined with queueing) act as an intermediate layer between the
+# database and the storage API. They will greatly improve efficiency on large
+# numbers of the same events being sent to the API in a short amount of time.
+# (read: if you send any kind of real data to Sentry, you should enable buffers)
+
+SENTRY_BUFFER = 'sentry.buffer.redis.RedisBuffer'
+
+############
+## Quotas ##
+############
+
+# Quotas allow you to rate limit individual projects or the Sentry install as
+# a whole.
+
+SENTRY_QUOTAS = 'sentry.quotas.redis.RedisQuota'
+
+##########
+## TSDB ##
+##########
+
+# The TSDB is used for building charts as well as making things like per-rate
+# alerts possible.
+
+SENTRY_TSDB = 'sentry.tsdb.redis.RedisTSDB'
+
+##################
+## File storage ##
+##################
+
+# Any Django storage backend is compatible with Sentry. For more solutions see
+# the django-storages package: https://django-storages.readthedocs.org/en/latest/
+
+SENTRY_FILESTORE = 'django.core.files.storage.FileSystemStorage'
+SENTRY_FILESTORE_OPTIONS = {
+    'location': '/tmp/sentry-files',
+}
+
+################
+## Web Server ##
+################
+
+# You MUST configure the absolute URI root for Sentry:
+SENTRY_URL_PREFIX = os.environ.get('SENTRY_URL_PREFIX', 'http://sentry.example.com')  # No trailing slash!
+
+# If you're using a reverse proxy, you should enable the X-Forwarded-Proto
+# header and uncomment the following settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 SENTRY_WEB_HOST = '0.0.0.0'
 SENTRY_WEB_PORT = int(os.environ.get('PORT', 9000))
 SENTRY_WEB_OPTIONS = {
-    'workers': 3,
-    'worker_class': 'gevent',
+    'workers': 3,  # the number of gunicorn workers
+    'secure_scheme_headers': {'X-FORWARDED-PROTO': 'https'},
 }
 
-SENTRY_URL_PREFIX = os.environ.get('SENTRY_URL_PREFIX', '')
+SENTRY_PUBLIC = False
 
+#################
+## Mail Server ##
+#################
 
-# Caching
-# -------
+# For more information check Django's documentation:
+#  https://docs.djangoproject.com/en/1.3/topics/email/?from=olddocs#e-mail-backends
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
-    }
-}
-
-
-# Email configuration
-# -------------------
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
 if 'SENDGRID_USERNAME' in os.environ:
     EMAIL_HOST = 'smtp.sendgrid.net'
     EMAIL_HOST_USER = os.environ.get('SENDGRID_USERNAME')
     EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_PASSWORD')
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
 elif 'MANDRILL_USERNAME' in os.environ:
     EMAIL_HOST = 'smtp.mandrillapp.com'
     EMAIL_HOST_USER = os.environ.get('MANDRILL_USERNAME')
     EMAIL_HOST_PASSWORD = os.environ.get('MANDRILL_APIKEY')
-
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+else:
+    EMAIL_HOST = 'localhost'
+    EMAIL_HOST_PASSWORD = ''
+    EMAIL_HOST_USER = ''
+    EMAIL_PORT = 25
+    EMAIL_USE_TLS = False
 
 # Disable the default admins (for email)
 ADMINS = ()
@@ -73,17 +190,28 @@ SERVER_EMAIL = os.environ.get('SERVER_EMAIL', 'root@localhost')
 
 DEFAULT_FROM_EMAIL = os.environ.get(
     'DEFAULT_FROM_EMAIL',
-    'webmaster@localhost'
+    SERVER_EMAIL
 )
 
+# If you're using mailgun for inbound mail, set your API key and configure a
+# route to forward to /api/hooks/mailgun/inbound/
+MAILGUN_API_KEY = ''
 
-# Security
-# --------
+###########
+## etc.  ##
+###########
+
+# If this file ever becomes compromised, it's important to regenerate your SECRET_KEY
+# Changing this value will result in all current sessions being invalidated
+SENTRY_KEY = os.environ.get('SENTRY_KEY')
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
+##############
+## Security ##
+##############
 
 INSTALLED_APPS += ('djangosecure',)
 MIDDLEWARE_CLASSES += ('djangosecure.middleware.SecurityMiddleware',)
-
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Whether to use HTTPOnly flag on the session cookie. If this is set to `True`,
 # client-side JavaScript will not to be able to access the session cookie.
@@ -121,12 +249,9 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
 # If set to True, causes `SecurityMiddleware` to redirect all non-HTTPS
 # requests to HTTPS
-SECURE_SSL_REDIRECT = True
-
+SECURE_SSL_REDIRECT = 'rue' in os.environ.get('SECURE_SSL_REDIRECT', 'True')
 
 # Bcrypt
-# ------
-
 INSTALLED_APPS += ('django_bcrypt',)
 
 # Enables bcrypt password migration on a ``check_password()`` call.
@@ -134,43 +259,34 @@ INSTALLED_APPS += ('django_bcrypt',)
 # The hash is also migrated when ``BCRYPT_ROUNDS`` changes.
 BCRYPT_MIGRATE = True
 
-
-# Social Auth
-# -----------
+#################
+## Social Auth ##
+#################
 
 SOCIAL_AUTH_CREATE_USERS = 'SOCIAL_AUTH_CREATE_USERS' in os.environ
 
-
-# Twitter
-# -------
+# http://twitter.com/apps/new
+# It's important that input a callback URL, even if its useless. We have no idea why, consult Twitter.
 TWITTER_CONSUMER_KEY = os.environ.get('TWITTER_CONSUMER_KEY')
 TWITTER_CONSUMER_SECRET = os.environ.get('TWITTER_CONSUMER_SECRET')
 
-
-# Facebook
-# --------
-
+# http://developers.facebook.com/setup/
 FACEBOOK_APP_ID = os.environ.get('FACEBOOK_APP_ID')
 FACEBOOK_API_SECRET = os.environ.get('FACEBOOK_API_SECRET')
 
-
-# Google
-# ------
-
+# http://code.google.com/apis/accounts/docs/OAuth2.html#Registering
 GOOGLE_OAUTH2_CLIENT_ID = os.environ.get('GOOGLE_OAUTH2_CLIENT_ID')
 GOOGLE_OAUTH2_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH2_CLIENT_SECRET')
 
-
-# GitHub
-# ------
-
+# https://github.com/settings/applications/new
 GITHUB_APP_ID = os.environ.get('GITHUB_APP_ID')
 GITHUB_API_SECRET = os.environ.get('GITHUB_API_SECRET')
 GITHUB_EXTENDED_PERMISSIONS = ['repo']
 
+# https://trello.com/1/appKey/generate
+TRELLO_API_KEY = os.environ.get('TRELLO_API_KEY')
+TRELLO_API_SECRET = os.environ.get('TRELLO_API_SECRET')
 
-# Bitbucket
-# ---------
-
+# https://confluence.atlassian.com/display/BITBUCKET/OAuth+Consumers
 BITBUCKET_CONSUMER_KEY = os.environ.get('BITBUCKET_CONSUMER_KEY')
 BITBUCKET_CONSUMER_SECRET = os.environ.get('BITBUCKET_CONSUMER_SECRET')
